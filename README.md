@@ -1,6 +1,6 @@
-# 📦 Streamlit App Starter Kit 
+# 📦 SHM App
 ```
-⬆️ (Replace above with your app's name)
+This is an app to detect anomalies in SHM
 ```
 
 Description of the app ...
