@@ -1,8 +1,3 @@
-python
-pip install --upgrade pip
+
 streamlit
-numpy
-pandas
-scikit-learn
-tensorflow
 
