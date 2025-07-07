@@ -1,5 +1,5 @@
 import streamlit as st
 
-st.title('🎈 App Name')
+st.title('🎈 SHM App')
 
-st.write('Hello world!')
+st.write('This app serves as a dashboard to see if given sensor value is an anomaly or not')
