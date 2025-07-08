@@ -9,7 +9,7 @@ import os
 # Load Model and Scaler
 # -------------------------------
 MODEL_PATH = "model/lstm_autoencoder.h5"
-SCALER_PATH = "model/scaler.pkl"  # if you saved it using pickle
+SCALER_PATH = "model/minmax_scaler.pkl"  # if you saved it using pickle
 
 # Load model without compiling (fixes 'mae' deserialization issue)
 model = load_model(MODEL_PATH, compile=False)
