@@ -11,7 +11,7 @@ import joblib
 MODEL_PATH = "model/lstm_autoencoder.h5"
 SCALER_PATH = "model/scaler.pkl"
 
-model = load_model(MODEL_PATH)
+model = load_model(MODEL_PATH, compile=False)
 scaler = joblib.load(SCALER_PATH)
 
 TIME_STEPS = 30
