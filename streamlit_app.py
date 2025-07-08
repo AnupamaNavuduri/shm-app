@@ -1,61 +1,67 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
-import joblib
+import pandas as pd
+import os
 
-# --------------------------
-# 1. Load model and scaler
-# --------------------------
+# -------------------------------
+# Load Model and Scaler
+# -------------------------------
 MODEL_PATH = "model/lstm_autoencoder.h5"
-SCALER_PATH = "model/scaler.pkl"
+SCALER_PATH = "model/scaler.pkl"  # if you saved it using pickle
 
+# Load model without compiling (fixes 'mae' deserialization issue)
 model = load_model(MODEL_PATH, compile=False)
-scaler = joblib.load(SCALER_PATH)
 
-TIME_STEPS = 30
-FEATURES = [
+# Load the same scaler used during training
+import pickle
+with open(SCALER_PATH, "rb") as f:
+    scaler = pickle.load(f)
+
+# -------------------------------
+# UI: Streamlit Input Form
+# -------------------------------
+st.title("🔍 SHM Anomaly Detection")
+
+st.markdown("Enter values for the following 9 features:")
+
+feature_names = [
     "AccX", "AccY", "AccZ",
     "GyroX", "GyroY", "GyroZ",
     "OrganicMatter", "Porosity", "WaterHoldingCapacity"
 ]
 
-# --------------------------
-# 2. Streamlit UI
-# --------------------------
-st.title("🚨 Anomaly Detection in Soil Sensor Data")
-st.subheader("Enter Sensor Feature Values")
+# Collect user input for each feature
+user_input = []
+for feature in feature_names:
+    value = st.number_input(f"{feature}", value=0.0)
+    user_input.append(value)
 
-user_input = {}
-for feature in FEATURES:
-    user_input[feature] = st.number_input(f"{feature}", value=0.0)
-
+# -------------------------------
+# Predict Anomaly
+# -------------------------------
 if st.button("Check for Anomaly"):
-    # --------------------------
-    # 3. Prepare input for LSTM
-    # --------------------------
-    input_df = pd.DataFrame([user_input])[FEATURES]
-    scaled_input = scaler.transform(input_df)
+    # Convert input to 2D array
+    input_array = np.array([user_input])
 
-    # Repeat to create a sequence
-    input_seq = np.repeat(scaled_input[np.newaxis, :], TIME_STEPS, axis=1)
+    # Scale input using saved scaler
+    scaled_input = scaler.transform(input_array)
 
-    # --------------------------
-    # 4. Predict & Calculate Error
-    # --------------------------
+    # Create sequence (reshape to 3D for LSTM)
+    TIME_STEPS = 30
+    repeated_input = np.repeat(scaled_input, TIME_STEPS, axis=0)
+    input_seq = np.reshape(repeated_input, (1, TIME_STEPS, len(feature_names)))
+
+    # Get reconstruction
     reconstructed = model.predict(input_seq)
     error = np.mean(np.abs(reconstructed - input_seq), axis=(1, 2))
 
-    # Load your threshold (you can tune this or compute dynamically)
-    threshold = 0.05  # Set your actual threshold here
+    # Set your previously computed threshold
+    threshold = 0.015  # ⚠️ Replace with your actual threshold
 
-    # --------------------------
-    # 5. Display Result
-    # --------------------------
-    is_anomaly = error[0] > threshold
-    st.metric("Reconstruction Error", f"{error[0]:.5f}")
-    if is_anomaly:
-        st.error("❌ Anomaly Detected!")
+    # Output result
+    if error[0] > threshold:
+        st.error(f"🚨 Anomaly detected! Reconstruction error = {error[0]:.5f}")
     else:
-        st.success("✅ Normal Data")
+        st.success(f"✅ Normal behavior. Reconstruction error = {error[0]:.5f}")
