@@ -1,67 +1,64 @@
+# streamlit_app.py
+
 import streamlit as st
 import numpy as np
+import joblib
 from tensorflow.keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
-import pandas as pd
-import os
 
-# -------------------------------
-# Load Model and Scaler
-# -------------------------------
+# Paths to saved model/scaler
 MODEL_PATH = "model/lstm_autoencoder.h5"
-SCALER_PATH = "model/scaler.joblib"  # if you saved it using pickle
+SCALER_PATH = "model/scaler.joblib"
+THRESHOLD_PATH = "model/anomaly_threshold.txt"
 
-# Load model without compiling (fixes 'mae' deserialization issue)
-model = load_model(MODEL_PATH, compile=False)
+# Load model and scaler
+model = load_model(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
+with open(THRESHOLD_PATH, "r") as f:
+    threshold = float(f.read())
 
-# Load the same scaler used during training
-import pickle
-with open(SCALER_PATH, "rb") as f:
-    scaler = pickle.load(f)
+st.title("🔍 Soil Sensor Anomaly Detection")
 
-# -------------------------------
-# UI: Streamlit Input Form
-# -------------------------------
-st.title("🔍 SHM Anomaly Detection")
+st.markdown("Enter the most recent sensor values to detect anomalies:")
 
-st.markdown("Enter values for the following 9 features:")
+# Input form
+with st.form("input_form"):
+    AccX = st.number_input("AccX")
+    AccY = st.number_input("AccY")
+    AccZ = st.number_input("AccZ")
+    GyroX = st.number_input("GyroX")
+    GyroY = st.number_input("GyroY")
+    GyroZ = st.number_input("GyroZ")
+    OrganicMatter = st.number_input("Organic Matter")
+    Porosity = st.number_input("Porosity")
+    WaterHoldingCapacity = st.number_input("Water Holding Capacity")
+    submitted = st.form_submit_button("Detect")
 
-feature_names = [
-    "AccX", "AccY", "AccZ",
-    "GyroX", "GyroY", "GyroZ",
-    "OrganicMatter", "Porosity", "WaterHoldingCapacity"
-]
+if submitted:
+    try:
+        # -------------------------------
+        # 1. Collect and scale input
+        # -------------------------------
+        input_features = np.array([[AccX, AccY, AccZ, GyroX, GyroY, GyroZ,
+                                    OrganicMatter, Porosity, WaterHoldingCapacity]])
+        input_scaled = scaler.transform(input_features)
 
-# Collect user input for each feature
-user_input = []
-for feature in feature_names:
-    value = st.number_input(f"{feature}", value=0.0)
-    user_input.append(value)
+        # Create a sequence with dummy data for context (30 timesteps required)
+        dummy_sequence = np.tile(input_scaled, (30, 1))  # shape: (30, num_features)
+        sequence = np.expand_dims(dummy_sequence, axis=0)  # shape: (1, 30, num_features)
 
-# -------------------------------
-# Predict Anomaly
-# -------------------------------
-if st.button("Check for Anomaly"):
-    # Convert input to 2D array
-    input_array = np.array([user_input])
+        # -------------------------------
+        # 2. Predict & calculate reconstruction error
+        # -------------------------------
+        reconstructed = model.predict(sequence)
+        reconstruction_error = np.mean(np.abs(sequence - reconstructed))
+        is_anomaly = reconstruction_error > threshold
 
-    # Scale input using saved scaler
-    scaled_input = scaler.transform(input_array)
+        # -------------------------------
+        # 3. Display result
+        # -------------------------------
+        st.subheader("Result")
+        st.write(f"Reconstruction Error: **{reconstruction_error:.5f}**")
+        st.success("✅ No anomaly detected.") if not is_anomaly else st.error("⚠️ Anomaly detected!")
 
-    # Create sequence (reshape to 3D for LSTM)
-    TIME_STEPS = 30
-    repeated_input = np.repeat(scaled_input, TIME_STEPS, axis=0)
-    input_seq = np.reshape(repeated_input, (1, TIME_STEPS, len(feature_names)))
-
-    # Get reconstruction
-    reconstructed = model.predict(input_seq)
-    error = np.mean(np.abs(reconstructed - input_seq), axis=(1, 2))
-
-    # Set your previously computed threshold
-    threshold = 0.015  # ⚠️ Replace with your actual threshold
-
-    # Output result
-    if error[0] > threshold:
-        st.error(f"🚨 Anomaly detected! Reconstruction error = {error[0]:.5f}")
-    else:
-        st.success(f"✅ Normal behavior. Reconstruction error = {error[0]:.5f}")
+    except Exception as e:
+        st.error(f"Error during processing: {e}")
