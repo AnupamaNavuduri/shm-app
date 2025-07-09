@@ -1,64 +1,47 @@
-# streamlit_app.py
-
 import streamlit as st
 import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
 
-# Paths to saved model/scaler
-MODEL_PATH = "model/lstm_autoencoder.h5"
-SCALER_PATH = "model/scaler.joblib"
-THRESHOLD_PATH = "model/anomaly_threshold.txt"
+# Load model, scaler, threshold
+model = load_model("model/lstm_autoencoder.h5")
+scaler = joblib.load("model/scaler.joblib")
 
-# Load model and scaler
-model = load_model(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
-with open(THRESHOLD_PATH, "r") as f:
+with open("model/anomaly_threshold.txt", "r") as f:
     threshold = float(f.read())
 
-st.title("🔍 Soil Sensor Anomaly Detection")
+st.title("🔍 Real-Time Anomaly Detection (LSTM Autoencoder)")
 
-st.markdown("Enter the most recent sensor values to detect anomalies:")
+st.markdown("Enter the latest sensor values to detect anomalies:")
 
-# Input form
-with st.form("input_form"):
-    AccX = st.number_input("AccX")
-    AccY = st.number_input("AccY")
-    AccZ = st.number_input("AccZ")
-    GyroX = st.number_input("GyroX")
-    GyroY = st.number_input("GyroY")
-    GyroZ = st.number_input("GyroZ")
-    OrganicMatter = st.number_input("Organic Matter")
-    Porosity = st.number_input("Porosity")
-    WaterHoldingCapacity = st.number_input("Water Holding Capacity")
-    submitted = st.form_submit_button("Detect")
+# Feature Inputs
+features = [
+    "AccX", "AccY", "AccZ",
+    "GyroX", "GyroY", "GyroZ",
+    "OrganicMatter", "Porosity", "WaterHoldingCapacity"
+]
 
-if submitted:
-    try:
-        # -------------------------------
-        # 1. Collect and scale input
-        # -------------------------------
-        input_features = np.array([[AccX, AccY, AccZ, GyroX, GyroY, GyroZ,
-                                    OrganicMatter, Porosity, WaterHoldingCapacity]])
-        input_scaled = scaler.transform(input_features)
+user_input = []
 
-        # Create a sequence with dummy data for context (30 timesteps required)
-        dummy_sequence = np.tile(input_scaled, (30, 1))  # shape: (30, num_features)
-        sequence = np.expand_dims(dummy_sequence, axis=0)  # shape: (1, 30, num_features)
+for feature in features:
+    value = st.number_input(f"{feature}", step=0.01, format="%.5f")
+    user_input.append(value)
 
-        # -------------------------------
-        # 2. Predict & calculate reconstruction error
-        # -------------------------------
-        reconstructed = model.predict(sequence)
-        reconstruction_error = np.mean(np.abs(sequence - reconstructed))
-        is_anomaly = reconstruction_error > threshold
+if st.button("🔎 Check for Anomaly"):
+    # Prepare input: shape must be (1, 30, num_features)
+    input_array = np.array([user_input] * 30)  # repeat same values for sequence
+    input_scaled = scaler.transform(input_array)
+    input_sequence = input_scaled.reshape(1, 30, len(features))
 
-        # -------------------------------
-        # 3. Display result
-        # -------------------------------
-        st.subheader("Result")
-        st.write(f"Reconstruction Error: **{reconstruction_error:.5f}**")
-        st.success("✅ No anomaly detected.") if not is_anomaly else st.error("⚠️ Anomaly detected!")
+    # Predict & calculate reconstruction error
+    prediction = model.predict(input_sequence)
+    error = np.mean(np.abs(prediction - input_sequence))
 
-    except Exception as e:
-        st.error(f"Error during processing: {e}")
+    st.write(f"📉 Reconstruction Error: {error:.5f}")
+    st.write(f"📊 Threshold: {threshold:.5f}")
+
+    if error > threshold:
+        st.error("🚨 Anomaly Detected!")
+    else:
+        st.success("✅ Normal Reading")
+
