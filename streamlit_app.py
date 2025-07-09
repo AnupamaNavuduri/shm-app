@@ -10,7 +10,7 @@ scaler = joblib.load("model/scaler.joblib")
 with open("model/anomaly_threshold.txt", "r") as f:
     threshold = float(f.read())
 
-st.title("🔍 Real-Time Anomaly Detection (LSTM Autoencoder)")
+st.title("🔍 SHM Anomaly Detection")
 
 st.markdown("Enter the latest sensor values to detect anomalies:")
 
